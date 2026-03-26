@@ -4,6 +4,5 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   // Base path — change to '/your-repo-name/' if deploying to GitHub Pages
-  // e.g. base: '/poker-session-manager/'
-  base: '/',
+  base: '/poker-session-manager/'
 })
