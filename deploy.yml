@@ -1,0 +1,75 @@
+# .github/workflows/deploy.yml
+#
+# Automatically deploys the React frontend to GitHub Pages
+# whenever you push to the main branch.
+#
+# SETUP STEPS (one-time):
+#   1. Push this repo to GitHub
+#   2. Go to repo Settings → Pages
+#   3. Under "Source" select "GitHub Actions"
+#   4. That's it — this workflow handles the rest on every push
+#
+# Your site will be live at:
+#   https://<your-github-username>.github.io/<your-repo-name>/
+#
+# IMPORTANT: Update vite.config.js base path to match your repo name:
+#   base: '/your-repo-name/'
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]          # Runs on every push to main
+  workflow_dispatch:           # Also allows manual trigger from GitHub UI
+
+# Give this workflow permission to write to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only allow one deployment at a time
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      # 1. Check out your code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Set up Node.js
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # 3. Install dependencies
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install
+
+      # 4. Build the React app (outputs to frontend/dist/)
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      # 5. Upload the built files as a Pages artifact
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+      # 6. Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
