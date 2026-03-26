@@ -1,19 +1,716 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Track poker sessions, calculate settlements, and view lifetime stats." />
-    <title>PokerTrack — Session Manager</title>
-    <!-- Bootstrap 5 for layout utilities -->
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PokerTrack — Session Manager</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>" />
+
+  <!-- React 18 (no build step needed — loaded from CDN) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel so we can write JSX inline -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117; --sf: #161b22; --sf2: #1e2530; --bd: #30363d;
+      --tx: #e6edf3; --ts: #7d8590; --gr: #10b981; --rd: #ef4444;
+      --yw: #f59e0b; --in: #6366f1; --gd: #d4a843; --r: 12px;
+    }
+    [data-theme="light"] {
+      --bg: #f0f4f8; --sf: #ffffff; --sf2: #e8edf2; --bd: #d1d9e0;
+      --tx: #1c2128; --ts: #57606a;
+    }
+    html, body { background: var(--bg); color: var(--tx); font-family: 'Syne', sans-serif; min-height: 100vh; transition: background .3s, color .3s; }
+    #root { display: flex; justify-content: center; }
+
+    /* ── Layout ── */
+    .app  { width: 100%; max-width: 480px; min-height: 100vh; display: flex; flex-direction: column; }
+    .nav  { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--sf); border-bottom: 1px solid var(--bd); position: sticky; top: 0; z-index: 100; }
+    .brand{ display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1.05rem; color: var(--gr); }
+    .brand span { color: var(--tx); }
+    .scr  { flex: 1; padding: 16px; padding-bottom: 90px; }
+
+    /* ── Buttons ── */
+    .ib   { background: none; border: 1px solid var(--bd); color: var(--ts); border-radius: 8px; padding: 6px 10px; cursor: pointer; font-family: 'Syne',sans-serif; font-size: .8rem; display: flex; align-items: center; gap: 5px; transition: all .2s; }
+    .ib:hover { color: var(--tx); }
+    .btn-primary { width: 100%; padding: 13px; background: var(--gr); color: #fff; border: none; border-radius: 11px; font-family: 'Syne',sans-serif; font-size: .92rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; transition: opacity .2s; }
+    .btn-primary:hover { opacity: .9; }
+    .btn-primary.lg { padding: 15px; font-size: 1rem; margin-top: 14px; }
+    .btn-ghost { width: 100%; padding: 10px; background: none; border: 1px solid var(--bd); color: var(--ts); border-radius: 10px; font-family: 'Syne',sans-serif; font-size: .85rem; cursor: pointer; margin-top: 8px; }
+    .btn-end  { background: rgba(239,68,68,.13); color: #ef4444; border: 1px solid rgba(239,68,68,.28); border-radius: 8px; padding: 6px 12px; font-size: .78rem; font-weight: 600; cursor: pointer; font-family:'Syne',sans-serif; display:flex;align-items:center;gap:5px; }
+    .btn-dashed{ width:100%;padding:10px;background:none;border:1px dashed var(--bd);border-radius:10px;color:var(--ts);font-family:'Syne',sans-serif;font-size:.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;margin-top:7px; }
+    .btn-icon-sm { background:none;border:1px solid var(--bd);color:var(--ts);border-radius:6px;padding:4px 6px;cursor:pointer;display:flex;transition:all .2s; }
+    .btn-icon-sm:hover { color:var(--rd);border-color:var(--rd); }
+
+    /* ── Cards / Stats ── */
+    .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 10px; }
+    .stats-grid.two { grid-template-columns: repeat(2,1fr); }
+    .stat-card { background: var(--sf); border: 1px solid var(--bd); border-radius: var(--r); padding: 11px; display: flex; align-items: flex-start; gap: 9px; }
+    .stat-icon { border-radius: 8px; padding: 7px; font-size: 1rem; flex-shrink: 0; }
+    .stat-label { font-size: .6rem; color: var(--ts); text-transform: uppercase; letter-spacing: .5px; font-weight: 600; display: block; }
+    .stat-value { font-family: 'DM Mono',monospace; font-size: .92rem; font-weight: 500; color: var(--tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ── Section label ── */
+    .sec-lbl { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--ts); margin: 14px 0 7px; display: flex; align-items: center; gap: 6px; }
+    .rob { background: rgba(16,185,129,.15); color: var(--gr); padding: 2px 6px; border-radius: 4px; font-size: .6rem; }
+
+    /* ── Badges ── */
+    .badge { font-size: .56rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: .5px; }
+    .badge-g { background: rgba(16,185,129,.15); color: var(--gr); }
+    .badge-y { background: rgba(245,158,11,.15); color: var(--yw); }
+    .badge-r { background: rgba(239,68,68,.15); color: var(--rd); }
+    .practice-badge { background: rgba(251,191,36,.2); color: var(--yw); font-size: .56rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; letter-spacing: .5px; }
+
+    /* ── Tab nav ── */
+    .tab-nav { display: flex; background: var(--sf); border: 1px solid var(--bd); border-radius: 10px; padding: 3px; gap: 2px; margin-bottom: 12px; }
+    .tab-btn { flex: 1; padding: 7px; border: none; background: none; color: var(--ts); font-family:'Syne',sans-serif; font-size: .78rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all .2s; }
+    .tab-btn.on { background: var(--sf2); color: var(--tx); }
+
+    /* ── Rows ── */
+    .row-card { background: var(--sf); border: 1px solid var(--bd); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .row-left { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+    .mono { font-family: 'DM Mono',monospace; font-size: .88rem; font-weight: 500; }
+    .player-row { background: var(--sf); border: 1px solid var(--bd); border-radius: 10px; padding: 9px 12px; display: flex; align-items: center; gap: 9px; margin-bottom: 5px; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--sf2); border: 1px solid var(--bd); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .8rem; color: var(--gr); flex-shrink: 0; }
+    .p-name { font-size: .87rem; font-weight: 600; display: block; }
+    .p-meta { font-size: .67rem; color: var(--ts); }
+    .sess-row { background: var(--sf); border: 1px solid var(--bd); border-radius: 10px; padding: 9px 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .sess-name { display: block; font-size: .84rem; font-weight: 600; }
+    .sess-meta { font-size: .67rem; color: var(--ts); }
+
+    /* ── FAB ── */
+    .fab { position: sticky; bottom: 0; padding: 10px 0; background: linear-gradient(to top, var(--bg) 65%, transparent); }
+    .fab-btn { width: 100%; padding: 14px; border: none; border-radius: 12px; font-family: 'Syne',sans-serif; font-size: .95rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--gr); color: #fff; box-shadow: 0 4px 18px rgba(16,185,129,.38); }
+
+    /* ── Modal (bottom sheet) ── */
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.72); z-index: 200; display: flex; align-items: flex-end; justify-content: center; backdrop-filter: blur(3px); }
+    .sheet   { background: var(--sf); border-radius: 20px 20px 0 0; width: 100%; max-width: 480px; padding: 18px 18px 30px; border-top: 1px solid var(--bd); }
+    .handle  { width: 34px; height: 4px; background: var(--bd); border-radius: 2px; margin: 0 auto 14px; }
+    .modal-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .modal-title { font-size: .97rem; font-weight: 700; }
+    .type-sel { display: flex; gap: 5px; margin-bottom: 14px; }
+    .type-btn { flex: 1; padding: 8px; border: 1px solid var(--bd); border-radius: 8px; background: var(--sf2); color: var(--ts); font-family:'Syne',sans-serif; font-size: .7rem; font-weight: 700; cursor: pointer; transition: all .2s; }
+
+    /* ── Forms ── */
+    .fg { margin-bottom: 13px; }
+    .fl { display: block; font-size: .63rem; font-weight: 700; color: var(--ts); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+    .fi { width: 100%; background: var(--sf2); border: 1px solid var(--bd); border-radius: 10px; padding: 10px 12px; color: var(--tx); font-family:'Syne',sans-serif; font-size: .88rem; outline: none; transition: border-color .2s; }
+    .fi:focus { border-color: var(--gr); }
+    select.fi { appearance: none; }
+    .pfx-wrap { position: relative; }
+    .pfx { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--ts); }
+    .pfx-wrap .fi { padding-left: 26px; }
+    .tgg { display: flex; gap: 6px; }
+    .tg-btn { flex: 1; padding: 10px; background: var(--sf2); border: 1px solid var(--bd); border-radius: 10px; color: var(--ts); font-family:'Syne',sans-serif; font-size: .83rem; font-weight: 600; cursor: pointer; transition: all .2s; }
+    .tg-btn.on { background: rgba(16,185,129,.15); border-color: var(--gr); color: var(--gr); }
+    .cb-row { display: flex; align-items: center; gap: 9px; padding: 7px 0; cursor: pointer; font-size: .88rem; }
+    .cb { width: 17px; height: 17px; border-radius: 5px; border: 2px solid var(--bd); flex-shrink: 0; transition: all .2s; }
+    .cb.on { background: var(--gr); border-color: var(--gr); }
+    .err-box { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); color: #ef4444; border-radius: 8px; padding: 8px 12px; font-size: .78rem; margin-bottom: 11px; }
+
+    /* ── Settlement ── */
+    .settle-card { background: var(--sf); border: 1px solid var(--bd); border-radius: var(--r); padding: 13px; }
+    .settle-hdr  { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--ts); }
+    .bal-chips   { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
+    .bal-chip    { display: flex; flex-direction: column; align-items: center; background: var(--sf2); border-radius: 8px; padding: 5px 9px; border: 1px solid var(--bd); }
+    .bal-chip.pos{ border-color: rgba(16,185,129,.3); }
+    .bal-chip.neg{ border-color: rgba(239,68,68,.3); }
+    .chip-name   { font-size: .6rem; color: var(--ts); font-weight: 600; }
+    .chip-amt    { font-family:'DM Mono',monospace; font-size: .8rem; font-weight: 500; }
+    .bal-chip.pos .chip-amt { color: var(--gr); }
+    .bal-chip.neg .chip-amt { color: var(--rd); }
+    .pay-row     { display: flex; align-items: center; gap: 6px; background: var(--sf2); border-radius: 8px; padding: 8px 10px; margin-bottom: 5px; }
+    .pay-from    { font-size: .82rem; font-weight: 600; flex: 1; }
+    .pay-to      { font-size: .82rem; font-weight: 600; flex: 1; color: var(--gr); }
+    .pay-amt     { font-family:'DM Mono',monospace; font-size: .88rem; font-weight: 600; color: var(--yw); }
+
+    /* ── Dashboard hero ── */
+    .hero { text-align: center; padding: 20px 0 14px; }
+    .hero-suits { font-size: 1.3rem; letter-spacing: 8px; color: var(--gd); margin-bottom: 6px; }
+    .hero-title { font-size: 1.7rem; font-weight: 800; }
+    .hero-sub   { color: var(--ts); font-size: .82rem; margin-top: 4px; }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 30px 16px; color: var(--ts); }
+    .empty-icon { font-size: 2.2rem; opacity: .35; margin-bottom: 10px; }
+    .add-player-row { display: flex; gap: 7px; align-items: center; margin-top: 8px; }
+    .add-player-row .fi { flex: 1; }
+
+    /* ── Session header ── */
+    .sess-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .sess-title-wrap { display: flex; align-items: center; gap: 8px; }
+    .sess-hdr-name { font-size: 1.05rem; font-weight: 700; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useReducer, createContext, useContext, useMemo, useEffect, useCallback } = React;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTILITIES
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Format a number as GBP currency  →  £1,234.56
+// Change "GBP" / "en-GB" to your local currency if needed
+const fmt = v => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(v || 0);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTLEMENT ALGORITHM
+// Goal: minimum number of payments to zero all balances
+// ─────────────────────────────────────────────────────────────────────────────
+
+function calcNetBalances(txs, playerIds) {
+  // Start everyone at zero
+  const bal = {};
+  playerIds.forEach(id => (bal[id] = 0));
+  txs.forEach(tx => {
+    if (!(tx.pid in bal)) return;
+    if (tx.type === "BUYIN" || tx.type === "REBUY") bal[tx.pid] -= tx.amt;  // money out
+    if (tx.type === "CASHOUT")                       bal[tx.pid] += tx.amt;  // money in
+  });
+  return bal;
+}
+
+function minimiseSettlements(balances, nameMap) {
+  const EPS = 0.005; // ignore sub-penny rounding noise
+  // Split into creditors (won money) and debtors (owe money)
+  const creds = [], debts = [];
+  Object.entries(balances).forEach(([id, v]) => {
+    if (v > EPS)  creds.push({ id, v });
+    if (v < -EPS) debts.push({ id, v: -v }); // store magnitude
+  });
+  // Sort largest-first so we cancel the biggest amounts first
+  creds.sort((a, b) => b.v - a.v);
+  debts.sort((a, b) => b.v - a.v);
+
+  const payments = [];
+  while (creds.length && debts.length) {
+    const c = creds[0], d = debts[0];
+    const amt = Math.round(Math.min(c.v, d.v) * 100) / 100; // round to 2dp
+    payments.push({ fromId: d.id, from: nameMap[d.id] || d.id, toId: c.id, to: nameMap[c.id] || c.id, amt });
+    c.v -= amt; d.v -= amt;
+    if (c.v < EPS) creds.shift(); // creditor fully paid — remove
+    if (d.v < EPS) debts.shift(); // debtor fully settled — remove
+  }
+  return payments;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE MANAGEMENT  (React Context + useReducer)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const Ctx = createContext(null);
+
+const INITIAL = {
+  sessions: [],    // completed sessions
+  active: null,    // session currently in progress
+  darkMode: true,
+};
+
+// Load any saved state from localStorage so data survives page refresh
+function loadState() {
+  try {
+    const saved = localStorage.getItem("pokertrack_v2");
+    return saved ? JSON.parse(saved) : INITIAL;
+  } catch { return INITIAL; }
+}
+
+function reducer(state, action) {
+  switch (action.type) {
+
+    case "CREATE_SESSION": {
+      const s = {
+        id: "s_" + Date.now(),
+        name: action.p.name,
+        mode: action.p.mode,             // "REAL" | "PRACTICE"
+        trackTime: action.p.trackTime,
+        enableGroups: action.p.enableGroups,
+        startTime: action.p.trackTime ? Date.now() : null,
+        status: "ACTIVE",
+        createdAt: new Date().toISOString(),
+        players: [],
+        txs: [],
+      };
+      return { ...state, active: s, sessions: [...state.sessions, s] };
+    }
+
+    case "END_SESSION": {
+      const done = { ...state.active, status: "DONE", endTime: new Date().toISOString() };
+      return { ...state, active: null, sessions: state.sessions.map(s => s.id === done.id ? done : s) };
+    }
+
+    case "ADD_PLAYER": {
+      const p = { id: "p_" + Date.now(), name: action.p.name };
+      const upd = { ...state.active, players: [...state.active.players, p] };
+      return { ...state, active: upd, sessions: state.sessions.map(s => s.id === upd.id ? upd : s) };
+    }
+
+    case "REMOVE_PLAYER": {
+      const upd = {
+        ...state.active,
+        players: state.active.players.filter(p => p.id !== action.p.id),
+        txs: state.active.txs.filter(t => t.pid !== action.p.id),
+      };
+      return { ...state, active: upd, sessions: state.sessions.map(s => s.id === upd.id ? upd : s) };
+    }
+
+    case "ADD_TX": {
+      const tx = { id: "tx_" + Date.now(), pid: action.p.pid, type: action.p.type, amt: action.p.amt, note: action.p.note || "", ts: new Date().toISOString() };
+      const upd = { ...state.active, txs: [...state.active.txs, tx] };
+      return { ...state, active: upd, sessions: state.sessions.map(s => s.id === upd.id ? upd : s) };
+    }
+
+    case "TOGGLE_THEME":
+      return { ...state, darkMode: !state.darkMode };
+
+    default: return state;
+  }
+}
+
+function Provider({ children }) {
+  const [state, dispatch] = useReducer(reducer, null, loadState);
+  // Auto-save to localStorage whenever state changes
+  useEffect(() => {
+    localStorage.setItem("pokertrack_v2", JSON.stringify(state));
+  }, [state]);
+  return <Ctx.Provider value={{ state, dispatch }}>{children}</Ctx.Provider>;
+}
+
+const useApp = () => useContext(Ctx);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIMER HOOK  — counts up from session start time
+// ─────────────────────────────────────────────────────────────────────────────
+function useTimer(session) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!session?.trackTime || !session?.startTime) return;
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [session?.id]);
+  if (!session?.trackTime) return null;
+  const e = Math.floor((Date.now() - session.startTime) / 1000);
+  const h = Math.floor(e / 3600), m = Math.floor((e % 3600) / 60), s = e % 60;
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAT CARD
+// ─────────────────────────────────────────────────────────────────────────────
+function StatCard({ icon, label, value, color }) {
+  return (
+    <div className="stat-card">
+      <div className="stat-icon" style={{ background: color + "22", color }}>{icon}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <span className="stat-label">{label}</span>
+        <div className="stat-value">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRANSACTION MODAL  — bottom sheet for adding buy-ins / cashouts
+// ─────────────────────────────────────────────────────────────────────────────
+function TxModal({ session, onClose }) {
+  const { dispatch } = useApp();
+  const [type, setType] = useState("BUYIN");
+  const [pid, setPid]   = useState("");
+  const [amt, setAmt]   = useState("");
+  const [note, setNote] = useState("");
+  const [err, setErr]   = useState("");
+
+  const typeColour = { BUYIN: "#10b981", REBUY: "#f59e0b", CASHOUT: "#ef4444" };
+
+  const submit = () => {
+    if (!pid) return setErr("Please select a player.");
+    if (!amt || isNaN(amt) || parseFloat(amt) <= 0) return setErr("Enter a valid amount.");
+    dispatch({ type: "ADD_TX", p: { pid, type, amt: parseFloat(amt), note } });
+    onClose();
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={e => e.stopPropagation()}>
+        <div className="handle" />
+        <div className="modal-hdr">
+          <span className="modal-title">Add Transaction</span>
+          <button className="ib" onClick={onClose}>✕</button>
+        </div>
+        {err && <div className="err-box">{err}</div>}
+        {/* Transaction type selector */}
+        <div className="type-sel">
+          {["BUYIN","REBUY","CASHOUT"].map(t => (
+            <button
+              key={t} className="type-btn"
+              style={type === t ? { background: typeColour[t], color: "#fff", borderColor: typeColour[t] } : {}}
+              onClick={() => { setType(t); setErr(""); }}
+            >{t}</button>
+          ))}
+        </div>
+        {/* Player */}
+        <div className="fg">
+          <label className="fl">Player</label>
+          <select className="fi" value={pid} onChange={e => setPid(e.target.value)}>
+            <option value="">— Select Player —</option>
+            {session.players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        {/* Amount */}
+        <div className="fg">
+          <label className="fl">Amount (£)</label>
+          <div className="pfx-wrap">
+            <span className="pfx">£</span>
+            <input className="fi" type="number" min="0" step="0.01" placeholder="0.00" value={amt} onChange={e => setAmt(e.target.value)} />
+          </div>
+        </div>
+        {/* Optional note */}
+        <div className="fg">
+          <label className="fl">Note (optional)</label>
+          <input className="fi" placeholder="e.g. rebuy after bad beat" value={note} onChange={e => setNote(e.target.value)} />
+        </div>
+        <button className="btn-primary" onClick={submit}>＋ Add Transaction</button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTLEMENT CARD  — shows "who pays who"
+// ─────────────────────────────────────────────────────────────────────────────
+function SettlementCard({ session }) {
+  const nameMap = useMemo(() => Object.fromEntries(session.players.map(p => [p.id, p.name])), [session.players]);
+  const balances = useMemo(() => calcNetBalances(session.txs, session.players.map(p => p.id)), [session.txs, session.players]);
+  const payments = useMemo(() => minimiseSettlements(balances, nameMap), [balances]);
+
+  return (
+    <div className="settle-card">
+      <div className="settle-hdr">🔀 Settlement (Washout)</div>
+      {/* Per-player balance chips */}
+      <div className="bal-chips">
+        {session.players.map(p => {
+          const v = balances[p.id] || 0;
+          return (
+            <div key={p.id} className={"bal-chip " + (v >= 0 ? "pos" : "neg")}>
+              <span className="chip-name">{p.name}</span>
+              <span className="chip-amt">{fmt(v)}</span>
+            </div>
+          );
+        })}
+      </div>
+      {/* Payment instructions */}
+      {payments.length === 0
+        ? <div style={{ color: "var(--gr)", fontSize: ".83rem", padding: "6px", display: "flex", alignItems: "center", gap: "5px" }}>✅ All settled!</div>
+        : payments.map((p, i) => (
+            <div key={i} className="pay-row">
+              <span className="pay-from">{p.from}</span>
+              <span style={{ color: "var(--ts)", fontSize: ".75rem" }}>›</span>
+              <span className="pay-to">{p.to}</span>
+              <span className="pay-amt">{fmt(p.amt)}</span>
+            </div>
+          ))
+      }
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTIVE SESSION SCREEN
+// ─────────────────────────────────────────────────────────────────────────────
+function SessionScreen() {
+  const { state, dispatch } = useApp();
+  const s = state.active;
+  const timer = useTimer(s);
+  const [tab, setTab] = useState("ledger");
+  const [showModal, setShowModal] = useState(false);
+  const [addingPlayer, setAddingPlayer] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  // Per-player profit/loss
+  const pb = useMemo(() => {
+    const m = {};
+    s.players.forEach(p => (m[p.id] = { buyins: 0, cashout: 0 }));
+    s.txs.forEach(tx => {
+      if (!m[tx.pid]) return;
+      if (tx.type === "BUYIN" || tx.type === "REBUY") m[tx.pid].buyins += tx.amt;
+      if (tx.type === "CASHOUT") m[tx.pid].cashout += tx.amt;
+    });
+    return m;
+  }, [s.txs, s.players]);
+
+  const totalPot = Object.values(pb).reduce((sum, p) => sum + p.buyins, 0);
+  const activePlayers = s.players.filter(p => pb[p.id]?.buyins > 0).length;
+
+  const badgeClass = t => ({ BUYIN: "badge-g", REBUY: "badge-y", CASHOUT: "badge-r" }[t] || "");
+  const pName = id => s.players.find(p => p.id === id)?.name || "?";
+
+  const addPlayer = () => {
+    if (!newName.trim()) return;
+    dispatch({ type: "ADD_PLAYER", p: { name: newName.trim() } });
+    setNewName(""); setAddingPlayer(false);
+  };
+
+  return (
+    <div className="scr">
+      {/* Header */}
+      <div className="sess-hdr">
+        <div className="sess-title-wrap">
+          <span className="sess-hdr-name">{s.name}</span>
+          {s.mode === "PRACTICE" && <span className="practice-badge">PRACTICE</span>}
+        </div>
+        <button className="btn-end" onClick={() => dispatch({ type: "END_SESSION" })}>⬡ End Session</button>
+      </div>
+
+      {/* Stat cards */}
+      <div className={"stats-grid" + (timer ? "" : " two")}>
+        <StatCard icon="£" label="Total Pot"    value={fmt(totalPot)}      color="#10b981" />
+        <StatCard icon="👥" label="Players"     value={activePlayers || s.players.length} color="#6366f1" />
+        {timer && <StatCard icon="⏱" label="Duration" value={timer}        color="#f59e0b" />}
+      </div>
+
+      {/* Tabs */}
+      <div className="tab-nav">
+        {["ledger","settle","players"].map(t => (
+          <button key={t} className={"tab-btn" + (tab === t ? " on" : "")} onClick={() => setTab(t)}>
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* ── LEDGER TAB ── */}
+      {tab === "ledger" && (
+        s.txs.length === 0
+          ? <div className="empty"><div className="empty-icon">💸</div><p>No transactions yet.<br />Tap the button below to add a buy-in.</p></div>
+          : [...s.txs].reverse().map(tx => (
+              <div key={tx.id} className="row-card">
+                <div className="row-left">
+                  <span className={"badge " + badgeClass(tx.type)}>{tx.type}</span>
+                  <span style={{ fontSize: ".84rem", fontWeight: 600 }}>{pName(tx.pid)}</span>
+                  {tx.note && <span style={{ fontSize: ".68rem", color: "var(--ts)" }}>{tx.note}</span>}
+                </div>
+                <span className="mono">{fmt(tx.amt)}</span>
+              </div>
+            ))
+      )}
+
+      {/* ── SETTLE TAB ── */}
+      {tab === "settle" && (
+        s.players.length < 2
+          ? <div className="empty"><div className="empty-icon">⚠️</div><p>Add at least 2 players to calculate settlement.</p></div>
+          : <SettlementCard session={s} />
+      )}
+
+      {/* ── PLAYERS TAB ── */}
+      {tab === "players" && (
+        <>
+          {s.players.map(p => {
+            const { buyins = 0, cashout = 0 } = pb[p.id] || {};
+            const net = cashout - buyins;
+            return (
+              <div key={p.id} className="player-row">
+                <div className="avatar">{p.name[0].toUpperCase()}</div>
+                <div style={{ flex: 1 }}>
+                  <span className="p-name">{p.name}</span>
+                  <span className="p-meta">Buyins: {fmt(buyins)}</span>
+                </div>
+                <span className="mono" style={{ color: net >= 0 ? "var(--gr)" : "var(--rd)", marginRight: 8 }}>
+                  {net >= 0 ? "+" : ""}{fmt(net)}
+                </span>
+                <button className="btn-icon-sm" onClick={() => dispatch({ type: "REMOVE_PLAYER", p: { id: p.id } })}>✕</button>
+              </div>
+            );
+          })}
+          {addingPlayer
+            ? <div className="add-player-row">
+                <input autoFocus className="fi" placeholder="Player name" value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && addPlayer()} />
+                <button className="btn-primary" style={{ width: "auto", padding: "10px 14px" }} onClick={addPlayer}>Add</button>
+                <button className="btn-ghost" style={{ width: "auto", padding: "10px 14px", marginTop: 0 }} onClick={() => setAddingPlayer(false)}>✕</button>
+              </div>
+            : <button className="btn-dashed" onClick={() => setAddingPlayer(true)}>＋ Add Player</button>
+          }
+        </>
+      )}
+
+      {/* FAB — fixed add button at bottom */}
+      <div className="fab">
+        <button className="fab-btn" onClick={() => {
+          if (s.players.length === 0) { alert("Go to the Players tab and add at least one player first."); return; }
+          setShowModal(true);
+        }}>
+          ＋ Add Buy-in / Cash-out
+        </button>
+      </div>
+
+      {showModal && <TxModal session={s} onClose={() => setShowModal(false)} />}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW SESSION FORM
+// ─────────────────────────────────────────────────────────────────────────────
+function NewSessionForm({ onCancel }) {
+  const { dispatch } = useApp();
+  const [name, setName]         = useState("");
+  const [mode, setMode]         = useState("REAL");      // REAL | PRACTICE
+  const [trackTime, setTrack]   = useState(true);
+  const [enableGroups, setGrps] = useState(false);
+
+  const create = () => {
+    if (!name.trim()) return;
+    dispatch({ type: "CREATE_SESSION", p: { name: name.trim(), mode, trackTime, enableGroups } });
+  };
+
+  return (
+    <div className="scr">
+      <h5 style={{ fontSize: "1.1rem", fontWeight: 800, marginBottom: 18 }}>New Session</h5>
+
+      <div className="fg">
+        <label className="fl">Session Name</label>
+        <input autoFocus className="fi" placeholder="Friday Night Game" value={name}
+          onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && create()} />
+      </div>
+
+      <div className="fg">
+        <label className="fl">Money Mode</label>
+        <div className="tgg">
+          <button className={"tg-btn" + (mode === "REAL" ? " on" : "")} onClick={() => setMode("REAL")}>💰 Real Money</button>
+          <button className={"tg-btn" + (mode === "PRACTICE" ? " on" : "")} onClick={() => setMode("PRACTICE")}>🎮 Practice</button>
+        </div>
+      </div>
+
+      <div className="fg">
+        <label className="fl">Options</label>
+        <div className="cb-row" onClick={() => setTrack(v => !v)}>
+          <div className={"cb" + (trackTime ? " on" : "")} /><span>Track Session Time</span>
+        </div>
+        <div className="cb-row" onClick={() => setGrps(v => !v)}>
+          <div className={"cb" + (enableGroups ? " on" : "")} /><span>Enable Settlement Groups</span>
+        </div>
+      </div>
+
+      <button className="btn-primary" onClick={create}>▶ Start Session</button>
+      <button className="btn-ghost" onClick={onCancel}>Cancel</button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD  — home screen with lifetime stats
+// ─────────────────────────────────────────────────────────────────────────────
+function Dashboard({ onNew }) {
+  const { state } = useApp();
+
+  // Only REAL money completed sessions count toward lifetime stats
+  // Practice sessions are permanently excluded here
+  const real = state.sessions.filter(s => s.status === "DONE" && s.mode === "REAL");
+
+  const { totalBuyins, totalCashouts, lifetimeNet, avgPerSession, profitRatio } = useMemo(() => {
+    let tb = 0, tc = 0;
+    real.forEach(s => s.txs.forEach(tx => {
+      if (tx.type === "BUYIN" || tx.type === "REBUY") tb += tx.amt;
+      if (tx.type === "CASHOUT") tc += tx.amt;
+    }));
+    const net = tc - tb;
+    return {
+      totalBuyins: tb, totalCashouts: tc,
+      lifetimeNet: net,
+      avgPerSession: real.length ? net / real.length : 0,
+      profitRatio: tb > 0 ? ((net / tb) * 100).toFixed(1) : "—",
+    };
+  }, [real]);
+
+  return (
+    <div className="scr">
+      <div className="hero">
+        <div className="hero-suits">♠ ♥ ♦ ♣</div>
+        <h4 className="hero-title">Poker Tracker</h4>
+        <p className="hero-sub">Track. Settle. Win.</p>
+      </div>
+
+      {/* Lifetime stats — real money only */}
+      <div className="sec-lbl">Lifetime Stats <span className="rob">Real Money Only</span></div>
+      <div className="stats-grid two">
+        <StatCard icon="📊" label="Sessions"  value={real.length}      color="#6366f1" />
+        <StatCard icon={lifetimeNet >= 0 ? "📈" : "📉"} label="Net P/L" value={fmt(lifetimeNet)} color={lifetimeNet >= 0 ? "#10b981" : "#ef4444"} />
+        <StatCard icon="🏆" label="P/L Ratio" value={profitRatio + "%"} color="#f59e0b" />
+        <StatCard icon="💰" label="Avg/Session" value={fmt(avgPerSession)} color="#8b5cf6" />
+      </div>
+
+      {/* Recent sessions */}
+      {real.length > 0 && <>
+        <div className="sec-lbl">Recent Sessions</div>
+        {[...real].reverse().slice(0, 5).map(s => {
+          const tb = s.txs.filter(t => t.type==="BUYIN"||t.type==="REBUY").reduce((x,t)=>x+t.amt,0);
+          const tc = s.txs.filter(t => t.type==="CASHOUT").reduce((x,t)=>x+t.amt,0);
+          const net = tc - tb;
+          return (
+            <div key={s.id} className="sess-row">
+              <div>
+                <span className="sess-name">{s.name}</span>
+                <span className="sess-meta">{new Date(s.createdAt).toLocaleDateString()} · {s.players.length} players</span>
+              </div>
+              <span className="mono" style={{ color: net >= 0 ? "var(--gr)" : "var(--rd)" }}>
+                {net >= 0 ? "+" : ""}{fmt(net)}
+              </span>
+            </div>
+          );
+        })}
+      </>}
+
+      <button className="btn-primary lg" onClick={onNew}>＋ New Session</button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROOT APP  — handles screen routing and dark/light mode
+// ─────────────────────────────────────────────────────────────────────────────
+function App() {
+  const { state, dispatch } = useApp();
+  const [view, setView] = useState("dash"); // "dash" | "new"
+
+  // Apply dark/light theme to the <html> element
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", state.darkMode ? "dark" : "light");
+  }, [state.darkMode]);
+
+  // If there's an active session, always show the session screen
+  const screen = state.active ? "session" : view;
+
+  return (
+    <div className="app">
+      {/* Navbar */}
+      <nav className="nav">
+        <div className="brand">♠ <span>PokerTrack</span></div>
+        <button className="ib" onClick={() => dispatch({ type: "TOGGLE_THEME" })}>
+          {state.darkMode ? "☀ Light" : "🌙 Dark"}
+        </button>
+      </nav>
+
+      {screen === "dash"    && <Dashboard onNew={() => setView("new")} />}
+      {screen === "new"     && <NewSessionForm onCancel={() => setView("dash")} />}
+      {screen === "session" && <SessionScreen />}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOUNT
+// ─────────────────────────────────────────────────────────────────────────────
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <Provider><App /></Provider>
+);
+</script>
+</body>
 </html>
